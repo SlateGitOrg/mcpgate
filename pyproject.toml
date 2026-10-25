@@ -43,7 +43,7 @@ dev = [
 [tool.ruff]
 line-length = 110
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "benchmarks"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S", "C4", "PIE", "PT", "RET", "TRY", "PERF", "LOG"]
@@ -51,13 +51,14 @@ ignore = ["TRY003", "S101", "TRY300"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/mcpgate/demo.py" = ["S105", "S603", "ASYNC110", "ASYNC240"]  # a script that drives subprocesses
+"benchmarks/**" = ["S603", "ASYNC110", "ASYNC220", "E501"]
 "tests/**" = ["S", "PT011", "PT018", "TRY", "PERF", "ASYNC109", "ASYNC110", "C416"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 warn_unreachable = true
-files = ["src", "tests"]
+files = ["src", "tests", "benchmarks"]
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
