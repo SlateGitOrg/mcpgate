@@ -109,6 +109,7 @@ class Gateway:
                     on_state=self._on_upstream_state,
                     timeout_s=up.timeout_s,
                     max_concurrency=up.max_concurrency,
+                    heartbeat_s=up.heartbeat_s,
                 )
             else:
                 self.upstreams[up.name] = Upstream.from_config(
@@ -380,19 +381,28 @@ class Gateway:
             )
         return _DenialAuditor(app, self, listen.path)
 
-    async def serve_http(self, *, ready: anyio.Event | None = None) -> None:
+    async def serve_http(self, *, ready: anyio.Event | None = None, stop: anyio.Event | None = None) -> None:
+        """Serve Streamable HTTP until ``stop`` is set (or uvicorn exits on a signal)."""
         listen = self.config.listen
         config = uvicorn.Config(
             self.http_app(), host=listen.host, port=listen.port, log_level="warning", lifespan="on"
         )
         server = uvicorn.Server(config)
         async with anyio.create_task_group() as tg:
-            tg.start_soon(server.serve)
+
+            async def run() -> None:
+                await server.serve()
+                tg.cancel_scope.cancel()
+
+            tg.start_soon(run)
             while not server.started:
                 await anyio.sleep(0.02)
             logger.info("mcpgate listening on http://%s:%s%s", listen.host, listen.port, listen.path)
             if ready is not None:
                 ready.set()
+            if stop is not None:
+                await stop.wait()
+                server.should_exit = True
 
     async def serve_stdio(self) -> None:
         async with stdio_server() as (read_stream, write_stream):

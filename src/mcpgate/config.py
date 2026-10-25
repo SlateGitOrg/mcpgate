@@ -59,6 +59,7 @@ class StdioUpstream(_Model):
     cwd: Path | None = None
     timeout_s: float = Field(default=30.0, gt=0)
     max_concurrency: int = Field(default=8, ge=1)
+    heartbeat_s: float = Field(default=15.0, ge=0)
 
 
 class HttpUpstream(_Model):
@@ -70,6 +71,7 @@ class HttpUpstream(_Model):
     headers: dict[str, str] = Field(default_factory=dict)
     timeout_s: float = Field(default=30.0, gt=0)
     max_concurrency: int = Field(default=8, ge=1)
+    heartbeat_s: float = Field(default=15.0, ge=0)
 
     @field_validator("url")
     @classmethod

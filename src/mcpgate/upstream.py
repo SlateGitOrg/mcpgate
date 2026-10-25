@@ -102,6 +102,7 @@ class Upstream:
         max_concurrency: int = 8,
         backoff_initial_s: float = 0.5,
         backoff_max_s: float = 30.0,
+        heartbeat_s: float = 15.0,
         config: StdioUpstream | HttpUpstream | None = None,
     ) -> None:
         self.name = name
@@ -112,6 +113,7 @@ class Upstream:
         self._limiter = anyio.CapacityLimiter(max_concurrency)
         self._backoff_initial = backoff_initial_s
         self._backoff_max = backoff_max_s
+        self._heartbeat = heartbeat_s
         self._client: Client | None = None
         self._ready = anyio.Event()
         self._reconnect = anyio.Event()
@@ -144,6 +146,7 @@ class Upstream:
             on_state=on_state,
             timeout_s=config.timeout_s,
             max_concurrency=config.max_concurrency,
+            heartbeat_s=config.heartbeat_s,
         )
 
     # -- lifecycle ---------------------------------------------------------------------------
@@ -170,7 +173,7 @@ class Upstream:
                         self._set_state("ready")
                         self._ready.set()
                         delay = self._backoff_initial
-                        await self._wait_reconnect_or_stop()
+                        await self._wait_reconnect_or_stop(client)
                 except Exception as exc:  # any transport/session failure -> backoff and retry
                     detail = _describe_exception(exc)
                     logger.warning("upstream %s failed: %s", self.name, detail)
@@ -189,7 +192,7 @@ class Upstream:
             tg.cancel_scope.cancel()
         self._set_state("stopped")
 
-    async def _wait_reconnect_or_stop(self) -> None:
+    async def _wait_reconnect_or_stop(self, client: Client) -> None:
         async with anyio.create_task_group() as tg:
 
             async def wait(event: anyio.Event) -> None:
@@ -198,6 +201,20 @@ class Upstream:
 
             tg.start_soon(wait, self._reconnect)
             tg.start_soon(wait, self._stop)
+            if self._heartbeat > 0:
+                tg.start_soon(self._heartbeat_loop, client)
+
+    async def _heartbeat_loop(self, client: Client) -> None:
+        """Ping the upstream periodically so a dead session is noticed without traffic."""
+        while True:
+            await anyio.sleep(self._heartbeat)
+            try:
+                with anyio.fail_after(self._timeout):
+                    await client.send_ping()
+            except Exception as exc:
+                logger.warning("upstream %s missed a heartbeat: %s", self.name, _describe_exception(exc))
+                self.request_reconnect()
+                return
 
     def stop(self) -> None:
         self._stop.set()
@@ -256,6 +273,11 @@ class Upstream:
                 with anyio.fail_after(self._timeout):
                     return await client.call_tool(tool, arguments, read_timeout_seconds=self._timeout)
             except MCPError as exc:
+                if exc.code == types.CONNECTION_CLOSED:
+                    self.request_reconnect()
+                    raise UpstreamError(self.name, "connection closed") from None
+                if exc.code == types.REQUEST_TIMEOUT:
+                    raise UpstreamError(self.name, f"timed out after {self._timeout:g}s") from None
                 return types.CallToolResult(
                     content=[types.TextContent(type="text", text=f"upstream error {exc.code}: {exc.message}")],
                     is_error=True,
