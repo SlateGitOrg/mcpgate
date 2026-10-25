@@ -1,0 +1,81 @@
+[project]
+name = "mcpgate"
+version = "0.1.0"
+description = "A security gateway for the Model Context Protocol: namespacing, OAuth 2.1 bearer validation, per-client tool RBAC, rate limits, argument validation, tamper-evident audit and tool-definition pinning."
+readme = "README.md"
+license = "MIT"
+keywords = ["mcp", "model-context-protocol", "gateway", "oauth", "security", "llm-agents"]
+authors = [
+    { name = "archit2501", email = "115419013+archit2501@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anyio>=4.15,<5",
+    "cryptography>=50.0.2,<51",
+    "httpx2>=2.16,<3",
+    "jsonschema>=4.26,<5",
+    "mcp>=2.3.0,<2.4",
+    "pydantic>=2.14,<3",
+    "pyjwt[crypto]>=2.15.1,<3",
+    "pyyaml>=6.0.3,<7",
+    "starlette>=1.10,<2",
+    "uvicorn>=0.54,<1",
+]
+
+[project.scripts]
+mcpgate = "mcpgate.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.170.9",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.2",
+    "types-jsonschema>=4.26.0.20261006",
+    "types-pyyaml>=6.0.12.20260906",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S", "C4", "PIE", "PT", "RET", "TRY", "PERF", "LOG"]
+ignore = ["TRY003", "S101", "TRY300"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PT011", "TRY", "PERF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers -p no:cacheprovider"
+markers = ["integration: spawns real upstream processes and HTTP listeners on 127.0.0.1"]
+filterwarnings = ["error::pytest.PytestUnraisableExceptionWarning"]
+
+[tool.coverage.run]
+source = ["mcpgate"]
+branch = true
+omit = ["*/mcpgate/demo.py", "*/mcpgate/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 85
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "if __name__ == .__main__.:"]
