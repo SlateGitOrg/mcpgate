@@ -146,7 +146,8 @@ async def test_rug_pull_is_detected_and_quarantined(tmp_path: Path) -> None:
         assert blocked.is_error
         assert "quarantined" in blocked.content[0].text  # type: ignore[union-attr]
         # an operator approves the change -> the tool is served again, no restart needed
-        gw.pins.approve("notes", "search_notes")
+        reviewed = gw.pins.snapshot()["upstreams"]["notes"]["pending"]["search_notes"]["digest"]
+        gw.pins.approve("notes", "search_notes", expect=reviewed)
         assert not (await client.call_tool("notes__search_notes", {"query": "restock"})).is_error
     alerts = [r for r in audit_records(gw) if r["event"] == "pin_alert"]
     assert [(a["kind"], a["tool"]) for a in alerts] == [("changed", "search_notes")]

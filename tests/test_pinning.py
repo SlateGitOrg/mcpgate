@@ -7,7 +7,7 @@ import mcp_types as types
 import pytest
 
 from mcpgate.config import PinningConfig
-from mcpgate.errors import PinStoreError
+from mcpgate.errors import PinApprovalMismatch, PinStoreError
 from mcpgate.fingerprint import Fingerprint, fingerprint
 from mcpgate.pinning import PinManager, PinStatus, PinStore
 
@@ -85,18 +85,27 @@ def test_on_new_tool_pin(tmp_path: Path) -> None:
     assert pm.status("notes", "b", fingerprint(tool("b"))) is PinStatus.PINNED
 
 
+def pending_digest(pm: PinManager, upstream: str, name: str) -> str:
+    digest: str = pm.snapshot()["upstreams"][upstream]["pending"][name]["digest"]
+    return digest
+
+
 def test_approve_promotes_pending(tmp_path: Path) -> None:
     pm = manager(tmp_path)
     pm.reconcile("notes", fps(tool("a"), tool("b")))
     pm.reconcile("notes", fps(tool("a", "v2"), tool("b", "v2")))
-    assert [e.tool for e in pm.approve("notes", "a")] == ["a"]
+    a2 = fingerprint(tool("a", "v2")).digest
+    assert [e.tool for e in pm.approve("notes", "a", expect=a2)] == ["a"]
     assert pm.status("notes", "a", fingerprint(tool("a", "v2"))) is PinStatus.PINNED
     assert pm.status("notes", "b", fingerprint(tool("b", "v2"))) is PinStatus.CHANGED
-    assert [e.tool for e in pm.approve("notes")] == ["b"]
+    review = pm.review_digest("notes")
+    assert review is not None
+    assert [e.tool for e in pm.approve("notes", expect=review)] == ["b"]
+    assert pm.review_digest("notes") is None
     with pytest.raises(PinStoreError, match="no pending"):
-        pm.approve("notes", "a")
+        pm.approve("notes", "a", expect=a2)
     with pytest.raises(PinStoreError, match="no pins"):
-        pm.approve("ghost")
+        pm.approve("ghost", expect="sha256:00")
     assert pm.pinned_fingerprint("notes", "b") == fingerprint(tool("b", "v2"))
     assert pm.pinned_fingerprint("notes", "zzz") is None
 
@@ -106,8 +115,58 @@ def test_approval_by_another_process_is_seen_live(tmp_path: Path) -> None:
     gateway.reconcile("notes", fps(tool("a")))
     gateway.reconcile("notes", fps(tool("a", "v2")))
     cli = manager(tmp_path)  # a second PinManager on the same file, like `mcpgate pins approve`
-    cli.approve("notes", "a")
+    cli.approve("notes", "a", expect=fingerprint(tool("a", "v2")).digest)
     assert gateway.status("notes", "a", fingerprint(tool("a", "v2"))) is PinStatus.PINNED
+
+
+def test_approval_is_bound_to_the_reviewed_digest(tmp_path: Path) -> None:
+    """Approval TOCTOU: the upstream swaps definitions between `pins diff` and `pins approve`."""
+    gateway = manager(tmp_path)
+    gateway.reconcile("notes", fps(tool("a")))
+    gateway.reconcile("notes", fps(tool("a", "change A")))
+    cli = manager(tmp_path)
+    reviewed = pending_digest(cli, "notes", "a")  # what `pins diff` showed the operator
+    assert reviewed == fingerprint(tool("a", "change A")).digest
+    # the upstream swaps to a second, unseen definition before the operator approves
+    gateway.reconcile("notes", fps(tool("a", "change B")))
+    with pytest.raises(PinApprovalMismatch, match="changed after review") as info:
+        cli.approve("notes", "a", expect=reviewed)
+    assert info.value.observed == fingerprint(tool("a", "change B")).digest
+    # nothing was pinned: B stays quarantined, the original pin is intact, B is still pending
+    assert gateway.status("notes", "a", fingerprint(tool("a", "change B"))) is PinStatus.CHANGED
+    assert gateway.pinned_fingerprint("notes", "a") == fingerprint(tool("a"))
+    assert pending_digest(cli, "notes", "a") == fingerprint(tool("a", "change B")).digest
+    # digest prefixes are not accepted: the operator must name the full reviewed digest
+    with pytest.raises(PinApprovalMismatch):
+        cli.approve("notes", "a", expect=fingerprint(tool("a", "change B")).digest[:19])
+    # approving what is actually pending (after a fresh review) works
+    cli.approve("notes", "a", expect=fingerprint(tool("a", "change B")).digest)
+    assert gateway.status("notes", "a", fingerprint(tool("a", "change B"))) is PinStatus.PINNED
+
+
+def test_approve_all_is_bound_to_the_reviewed_pending_set(tmp_path: Path) -> None:
+    gateway = manager(tmp_path)
+    gateway.reconcile("notes", fps(tool("a"), tool("b")))
+    gateway.reconcile("notes", fps(tool("a", "v2"), tool("b")))
+    cli = manager(tmp_path)
+    reviewed = cli.review_digest("notes")
+    assert reviewed is not None
+    # a new tool is slipped in after review: the pending set no longer matches
+    gateway.reconcile("notes", fps(tool("a", "v2"), tool("b"), tool("c")))
+    with pytest.raises(PinApprovalMismatch, match="changed after review"):
+        cli.approve("notes", expect=reviewed)
+    assert gateway.status("notes", "a", fingerprint(tool("a", "v2"))) is PinStatus.CHANGED
+    # a swapped definition inside the set is caught the same way
+    fresh = cli.review_digest("notes")
+    gateway.reconcile("notes", fps(tool("a", "v3"), tool("b"), tool("c")))
+    with pytest.raises(PinApprovalMismatch):
+        cli.approve("notes", expect=fresh or "")
+    # the review digest is order-independent and covers names as well as digests
+    final = cli.review_digest("notes")
+    assert final is not None and final not in {reviewed, fresh}
+    assert sorted(e.tool or "" for e in cli.approve("notes", expect=final)) == ["a", "c"]
+    with pytest.raises(PinApprovalMismatch, match="nothing is pending"):
+        cli.approve("notes", expect=final)
 
 
 def test_warn_mode_and_disabled(tmp_path: Path) -> None:

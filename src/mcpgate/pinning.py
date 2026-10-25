@@ -22,6 +22,13 @@ pin, and a running gateway notices the store's new mtime on its next lookup, so 
 effect without a restart. If the upstream reverts to the pinned definition the tool is
 served again automatically.
 
+Approval is bound to what the operator reviewed. ``pins diff`` prints the full observed digest
+of each pending tool and a *review digest* over the whole pending set of an upstream; ``approve``
+must be given that value and refuses, without changing anything, if what is pending now differs
+(the upstream swapped definitions, or slipped in another tool, between review and approval).
+The comparison and the promotion happen in one transaction under the store lock, so a
+concurrent ``reconcile`` cannot interleave between them.
+
 Store format
 ------------
 A single JSON document written atomically (temp file + ``os.replace``) under an exclusive
@@ -42,11 +49,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from mcpgate.canonical import digest
 from mcpgate.config import PinningConfig
-from mcpgate.errors import PinStoreError
+from mcpgate.errors import PinApprovalMismatch, PinStoreError
 from mcpgate.fingerprint import Fingerprint, describe_change
 
-__all__ = ["PinEvent", "PinManager", "PinStatus", "PinStore"]
+__all__ = ["PinEvent", "PinManager", "PinStatus", "PinStore", "pending_set_digest"]
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +80,18 @@ class PinEvent:
     tool: str | None
     severity: str
     detail: Mapping[str, Any] = field(default_factory=dict)
+
+
+def pending_set_digest(upstream: str, pending: Mapping[str, Any]) -> str | None:
+    """Review digest of an upstream's pending set (``None`` when nothing is pending).
+
+    Canonical-JSON SHA-256 over the upstream name and every pending ``name -> observed digest``
+    pair, so it is independent of ordering and changes if any pending definition is swapped or a
+    tool joins or leaves the set. ``mcpgate pins diff`` prints it; ``approve --all`` checks it.
+    """
+    if not pending:
+        return None
+    return digest({"upstream": upstream, "pending": {n: r["digest"] for n, r in pending.items()}})
 
 
 class PinStore:
@@ -254,8 +274,27 @@ class PinManager:
     def _pin_record(fp: Fingerprint, now: float, how: str) -> dict[str, Any]:
         return {**fp.to_json(), "pinned_at": now, "approved_by": how}
 
-    def approve(self, upstream: str, tool: str | None = None, *, by: str = "cli") -> list[PinEvent]:
-        """Promote pending observations to pins (one tool, or all pending for the upstream)."""
+    def review_digest(self, upstream: str) -> str | None:
+        """Digest binding the whole pending set of ``upstream`` (``None`` if nothing is pending).
+
+        It covers every pending tool name and observed digest, so it changes if any pending
+        definition is swapped or a tool is added to or dropped from the set.
+        """
+        self._refresh_if_stale()
+        entry = self._data["upstreams"].get(upstream)
+        pending = entry.get("pending", {}) if isinstance(entry, dict) else {}
+        return pending_set_digest(upstream, pending)
+
+    def approve(
+        self, upstream: str, tool: str | None = None, *, expect: str, by: str = "cli"
+    ) -> list[PinEvent]:
+        """Promote pending observations to pins, but only the ones the operator reviewed.
+
+        With ``tool``, ``expect`` must equal that tool's pending observed digest; without it,
+        every pending tool of ``upstream`` is approved and ``expect`` must equal
+        :meth:`review_digest`. On a mismatch :class:`PinApprovalMismatch` is raised and the store
+        is left untouched. Digests are compared in full; prefixes are refused.
+        """
         events: list[PinEvent] = []
         now = self._clock()
         with self.store.transaction() as data:
@@ -263,12 +302,20 @@ class PinManager:
             if entry is None:
                 raise PinStoreError(f"no pins recorded for upstream {upstream!r}")
             pending: dict[str, Any] = entry.get("pending", {})
-            names = sorted(pending) if tool is None else [tool]
-            for name in names:
-                record = pending.pop(name, None)
+            if tool is None:
+                current = pending_set_digest(upstream, pending)
+                if current != expect:
+                    raise PinApprovalMismatch(upstream, None, expect, current)
+                names = sorted(pending)
+            else:
+                record = pending.get(tool)
                 if record is None:
-                    raise PinStoreError(f"no pending change for {upstream}/{name}")
-                fp = Fingerprint.from_json(record)
+                    raise PinStoreError(f"no pending change for {upstream}/{tool}")
+                if record["digest"] != expect:
+                    raise PinApprovalMismatch(upstream, tool, expect, str(record["digest"]))
+                names = [tool]
+            for name in names:
+                fp = Fingerprint.from_json(pending.pop(name))
                 entry["tools"][name] = self._pin_record(fp, now, by)
                 events.append(PinEvent("approved", upstream, name, "info", {"digest": fp.digest}))
             self._data = data

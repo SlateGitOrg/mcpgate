@@ -31,7 +31,7 @@ from mcpgate.errors import GatewayError
 from mcpgate.fingerprint import Fingerprint, describe_change
 from mcpgate.gateway import Gateway
 from mcpgate.lint import lint_definition
-from mcpgate.pinning import PinManager
+from mcpgate.pinning import PinManager, pending_set_digest
 
 __all__ = ["main"]
 
@@ -141,7 +141,9 @@ def cmd_pins(args: argparse.Namespace) -> int:
         for upstream, entry in sorted(data["upstreams"].items()):
             if args.upstream and upstream != args.upstream:
                 continue
-            for name, record in sorted(entry.get("pending", {}).items()):
+            pending = entry.get("pending", {})
+            approve_cmd = f"mcpgate pins -c {args.config} approve {upstream}"
+            for name, record in sorted(pending.items()):
                 if args.tool and name != args.tool:
                     continue
                 shown += 1
@@ -154,10 +156,16 @@ def cmd_pins(args: argparse.Namespace) -> int:
                     _out(json.dumps(observed.definition, indent=2))
                 for finding in lint_definition(observed.definition):
                     _out(f"  lint {finding.severity}:{finding.rule} at {finding.location}: {finding.excerpt}")
+                _out(f"  observed digest {observed.digest}")
+                _out(f"  approve with    {approve_cmd} {name} --digest {observed.digest}")
+            review = pending_set_digest(upstream, pending)
+            if review is not None and not args.tool:
+                _out(f"== {upstream}: review digest of all {len(pending)} pending {review}")
+                _out(f"  approve with    {approve_cmd} --all --digest {review}")
         if not shown:
             _out("no pending changes")
         return 0
-    events = pins.approve(args.upstream, None if args.all else args.tool, by=args.by)
+    events = pins.approve(args.upstream, None if args.all else args.tool, expect=args.digest, by=args.by)
     for event in events:
         _out(f"approved {event.upstream}/{event.tool} -> {event.detail['digest']}")
     return 0
@@ -249,6 +257,12 @@ def build_parser() -> argparse.ArgumentParser:
     approve.add_argument("upstream")
     approve.add_argument("tool", nargs="?")
     approve.add_argument("--all", action="store_true", help="approve every pending tool of the upstream")
+    approve.add_argument(
+        "--digest",
+        required=True,
+        help="the full digest `pins diff` printed for what you reviewed (for --all: the upstream's "
+        "review digest); refused if what is pending now differs",
+    )
     approve.add_argument("--by", default="cli", help="who approved (recorded in the store)")
     pins.set_defaults(func=cmd_pins)
 
