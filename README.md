@@ -20,7 +20,7 @@ It is built on the official [`mcp` Python SDK](https://github.com/modelcontextpr
 2.3 (low-level `Server` + `Client`) and speaks both the 2025-11-25 handshake protocol and the
 2026-07-28 stateless protocol.
 
-> Status: a portfolio project. It is tested (133 tests, 94.9 % branch coverage) but has not been
+> Status: a portfolio project. It is tested (135 tests, 95.0 % branch coverage) but has not been
 > externally audited or run in production. Read [Limitations](#limitations) and
 > [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before trusting it with anything.
 
@@ -230,12 +230,12 @@ Output from the latest run (abridged):
 45 files already formatted
 All checks passed!
 Success: no issues found in 45 source files
-TOTAL                                      2257     98    572     24    95%
-Required test coverage of 85.0% reached. Total coverage: 94.91%
-133 passed in 14.06s
+TOTAL                                      2294     98    584     24    95%
+Required test coverage of 85.0% reached. Total coverage: 95.00%
+135 passed in 12.86s
 ```
 
-- 128 unit and in-process tests, plus 5 integration tests (`pytest -m integration`). The
+- 130 unit and in-process tests, plus 5 integration tests (`pytest -m integration`). The
   integration tests start the sample servers as real subprocesses (stdio, and HTTP with a
   required credential) and run the gateway on a real 127.0.0.1 socket with JWT auth. They cover
   both protocol eras, an HTTP-upstream rug pull, and recovery from a crashing stdio upstream.
