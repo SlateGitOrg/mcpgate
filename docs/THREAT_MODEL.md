@@ -4,7 +4,7 @@ This document states what mcpgate defends against, what it assumes, and where it
 written for an operator deciding whether to put mcpgate between agents and MCP servers, and for
 a reviewer checking that the controls in the code match the claims in the README.
 
-mcpgate is a portfolio project. It has not been externally audited and has no production
+mcpgate has not been externally audited and has no production
 deployments. Everything below describes the code in this repository and the tests that
 exercise it.
 

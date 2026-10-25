@@ -1,5 +1,7 @@
 # mcpgate
 
+[![CI](https://github.com/SlateGitOrg/mcpgate/actions/workflows/ci.yml/badge.svg)](https://github.com/SlateGitOrg/mcpgate/actions/workflows/ci.yml)
+
 A security gateway for the Model Context Protocol. mcpgate sits between LLM agents and any
 number of MCP servers, which can be stdio subprocesses or Streamable HTTP endpoints. It exposes
 them as **one** MCP server, and every tool call passes through these checks:
@@ -20,7 +22,7 @@ It is built on the official [`mcp` Python SDK](https://github.com/modelcontextpr
 2.3 (low-level `Server` + `Client`) and speaks both the 2025-11-25 handshake protocol and the
 2026-07-28 stateless protocol.
 
-> Status: a portfolio project. It is tested (135 tests, 95.0 % branch coverage) but has not been
+> Status: tested (135 tests, 95.0 % branch coverage) but has not been
 > externally audited or run in production. Read [Limitations](#limitations) and
 > [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before trusting it with anything.
 
@@ -83,7 +85,7 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (algorithms, complexit
 strategy) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) (trust boundaries, STRIDE controls
 mapped to tests, residual risk).
 
-## Quickstart
+## Quick start
 
 Requirements: [uv](https://docs.astral.sh/uv/) and Python 3.12 (uv installs it if missing).
 Ollama with `llama3.1:8b` is optional and only used by the demo.
@@ -218,7 +220,7 @@ instead. It does try the forbidden tool:
   audit ground truth for agent-analyst: inventory__get_stock=allowed, notes__add_note=allowed, inventory__adjust_stock=denied_policy
 ```
 
-## Tests and coverage
+## Testing
 
 ```bash
 make check
@@ -339,8 +341,8 @@ The full list, with the cost of each one if it turns out wrong, is in [DECISIONS
 - **Demo agent.** `llama3.1:8b` is unreliable at multi-step tool use (see the transcript above),
   which is the point the demo makes, but it is not a benchmark of agent quality. CI only runs the
   scripted agent.
-- **CI not executed.** `.github/workflows/ci.yml` runs the same gates. It has not run because the
-  repository has not been pushed.
+- **CI runs the offline gates only.** `.github/workflows/ci.yml` runs `make check`; the Ollama demo
+  is not exercised in CI.
 
 ## Roadmap
 
@@ -369,4 +371,4 @@ Source size: `wc -l src/mcpgate/*.py src/mcpgate/samples/*.py` reports 4,183 lin
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
