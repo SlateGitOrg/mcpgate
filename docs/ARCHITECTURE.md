@@ -149,6 +149,16 @@ drop pending entries whose tool vanished
 * **Live approval.** `mcpgate pins approve` writes the store under `flock`. A running gateway
   checks the store's `st_mtime_ns` on each lookup and reloads, so no restart is needed
   (`tests/test_pinning.py::test_approval_by_another_process_is_seen_live`).
+* **Approval is bound to the review.** `pins diff` prints each pending tool's full observed
+  digest and, per upstream, a review digest
+  `digest({"upstream": u, "pending": {name: observed digest}})` (`pending_set_digest`, O(p) for
+  p pending tools). `approve` requires that value (`--digest`) and, inside the same locked
+  transaction that would promote the record, compares it with what is pending *now*. On a
+  mismatch it raises `PinApprovalMismatch` and writes nothing. Without this, an upstream could
+  swap definitions between the operator's `diff` and `approve`, and the operator would pin a
+  definition they never saw
+  (`tests/test_pinning.py::test_approval_is_bound_to_the_reviewed_digest`,
+  `::test_approve_all_is_bound_to_the_reviewed_pending_set`).
 * **Alert de-duplication.** A pending change is alerted once per distinct observed digest, so a
   60 s refresh loop does not flood the log.
 * **Diffs.** `describe_change` lists changed fields, a unified diff of the description and a

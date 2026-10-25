@@ -115,11 +115,17 @@ Point any MCP client at `http://127.0.0.1:8740/mcp` with `Authorization: Bearer 
 
 ```bash
 uv run mcpgate pins -c examples/gateway.yaml status             # pinned / pending / missing
-uv run mcpgate pins -c examples/gateway.yaml diff notes         # what changed
-uv run mcpgate pins -c examples/gateway.yaml approve notes search_notes --by ops-oncall
+uv run mcpgate pins -c examples/gateway.yaml diff notes         # what changed + its full digest
+uv run mcpgate pins -c examples/gateway.yaml approve notes search_notes \
+    --digest sha256:<digest printed by diff> --by ops-oncall
 uv run mcpgate audit -c examples/gateway.yaml verify            # re-derive the hash chain
 uv run mcpgate audit -c examples/gateway.yaml tail
 ```
+
+`approve` must be given the digest that `diff` printed for the definition you reviewed (for
+`--all`, the upstream's review digest over its whole pending set). If the upstream swapped to
+another definition, or added a tool, between your `diff` and your `approve`, the approval is
+refused and nothing is pinned; run `diff` again.
 
 These commands load and fully validate the config, so `INVENTORY_TOKEN` must be set for them too.
 In production, `auth.jwks_file` points at your authorization server's public keys (Keycloak,

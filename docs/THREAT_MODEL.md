@@ -77,6 +77,7 @@ Each row names the control and the test that exercises it. Paths are relative to
 |---|---|---|
 | **Rug pull**: an upstream changes a tool's description or schema after approval | Tool-definition pinning: SHA-256 over the canonical JSON of name, title, description, inputSchema, outputSchema and annotations. In `enforce` mode a changed tool is hidden and refused until `mcpgate pins approve`. | `tests/test_pinning.py`, `tests/test_integration_http.py::test_http_upstream_rug_pull_is_quarantined`, `benchmarks/bench.py` mutation matrix, demo section 5 |
 | New tool slipped into an approved server | `on_new_tool: quarantine` (default) | `tests/test_pinning.py::test_new_and_removed_tools` |
+| **Approval race**: a quarantined upstream swaps to a second definition (or adds a tool) between the operator's `pins diff` and `pins approve`, so the operator pins something unseen | `approve` requires the full digest `diff` printed (`--digest`; for `--all`, a review digest over every pending name and digest) and compares it with the pending record inside the same `flock` transaction that would promote it; on mismatch nothing is written and the tool stays quarantined. Prefixes are refused. | `tests/test_pinning.py::test_approval_is_bound_to_the_reviewed_digest`, `::test_approve_all_is_bound_to_the_reviewed_pending_set`, `tests/test_cli.py::test_catalog_pins_and_audit_flow` |
 | A cached listing hides a change | SDK client cache disabled (`cache=None`), `cache_mode="refresh"` on every listing, periodic re-listing via heartbeat, `tools/list_changed` handled | `tests/test_upstream.py` |
 | Malformed or oversized arguments from a confused model | Size and depth caps first, then JSON Schema validation (draft from `$schema`, 2020-12 by default) before forwarding | `tests/test_validation.py`, demo section 4 |
 | Hostile schema causes the gateway to fetch remote `$ref`s (SSRF) | Validator uses a registry with no retriever | `tests/test_validation.py` |
@@ -138,26 +139,31 @@ These are real gaps. An operator should know them before relying on mcpgate.
 2. **Pinning covers definitions, not behaviour.** A server can keep its description identical
    and change what the tool does, or return injected text in tool *results*. mcpgate does not
    inspect or sanitise results.
-3. **Window between change and detection.** A change is caught at the next listing: a
+3. **Approval binds the definition, not the review itself.** `pins approve --digest` guarantees
+   that what gets pinned is byte-for-byte the definition `pins diff` showed (same canonical
+   digest). It cannot tell whether the operator actually read that diff, and someone who runs
+   `diff` and pastes the digest blindly gets no protection. A definition can also change *after*
+   approval; that is an ordinary new change and is quarantined again.
+4. **Window between change and detection.** A change is caught at the next listing: a
    reconnect, a `tools/list_changed` notification, the heartbeat (default 15 s) or the refresh
    loop (default 60 s). Calls in that window use the previously observed definition.
-4. **Bearer tokens are replayable** within their lifetime. There is no DPoP or mTLS sender
+5. **Bearer tokens are replayable** within their lifetime. There is no DPoP or mTLS sender
    constraint and no `jti` replay cache (`require_jti` only checks presence). Keep token TTLs short.
-5. **No token introspection or revocation.** Validation is purely local (JWKS file). A revoked
+6. **No token introspection or revocation.** Validation is purely local (JWKS file). A revoked
    but unexpired token is accepted until `exp`.
-6. **The audit chain does not prove completeness.** Truncating the tail is only detected with an
+7. **The audit chain does not prove completeness.** Truncating the tail is only detected with an
    externally anchored head (`mcpgate audit verify --expect-head`). Someone with write access to
    the file can also rewrite the whole chain consistently. Anchoring the head elsewhere (a
    WORM bucket, a ticket, a signed timestamp) is left to the operator. `fsync` is off by
    default, so the last records can be lost on power failure.
-7. **stdio transport has no authentication.** Callers on the gateway's own stdio get the
+8. **stdio transport has no authentication.** Callers on the gateway's own stdio get the
    configured `stdio_identity`. That is meant for a single local agent process.
-8. **TLS is not terminated by mcpgate.** It listens on plain HTTP and is meant to sit behind a
+9. **TLS is not terminated by mcpgate.** It listens on plain HTTP and is meant to sit behind a
    TLS-terminating proxy, with `listen.public_url` set so the token audience matches.
-9. **Rate limits are per process.** Several gateway replicas do not share buckets.
-10. **Upstream stdio servers inherit the gateway's environment** unless `env` is set per
+10. **Rate limits are per process.** Several gateway replicas do not share buckets.
+11. **Upstream stdio servers inherit the gateway's environment** unless `env` is set per
     upstream. Least privilege for subprocesses (separate users, sandboxes) is out of scope.
-11. **The dev issuer (`mcpgate keys`/`token`) is for development only.** It writes a private key
+12. **The dev issuer (`mcpgate keys`/`token`) is for development only.** It writes a private key
     to disk and mints arbitrary tokens. Production uses a real authorization server's JWKS.
 
 ## 6. Safe-lab note
