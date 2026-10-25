@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    # `make check` = ruff format --check + ruff check + mypy --strict + pytest with the coverage gate.
+    # The integration tests spawn the bundled sample servers on 127.0.0.1; no Docker, no network.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.28"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: make check
+
+  demo:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.28"
+          enable-cache: true
+      - run: uv python install 3.12
+      # No Ollama on CI runners: the demo falls back to its deterministic scripted agent.
+      - run: uv run --frozen python -u -m mcpgate.demo --provider scripted
