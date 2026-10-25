@@ -338,7 +338,7 @@ class Gateway:
         """Re-list every connected upstream now (pinning runs on the fresh listings)."""
         for upstream in self.upstreams.values():
             if upstream.state == "ready":
-                await upstream.refresh()
+                await upstream.refresh(force=False)
 
     def health(self) -> dict[str, Any]:
         states = Counter(u.state for u in self.upstreams.values())

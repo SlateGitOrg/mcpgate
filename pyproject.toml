@@ -50,6 +50,7 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S", "C4", "PIE"
 ignore = ["TRY003", "S101", "TRY300"]
 
 [tool.ruff.lint.per-file-ignores]
+"src/mcpgate/demo.py" = ["S105", "S603", "ASYNC110", "ASYNC240"]  # a script that drives subprocesses
 "tests/**" = ["S", "PT011", "PT018", "TRY", "PERF", "ASYNC109", "ASYNC110", "C416"]
 
 [tool.mypy]

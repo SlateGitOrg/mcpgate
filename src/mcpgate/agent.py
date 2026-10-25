@@ -107,7 +107,11 @@ async def run_agent(
     provider: ChatProvider,
     task: str,
     *,
-    system: str = "You are an operations assistant. Use the provided tools; never invent tool results.",
+    system: str = (
+        "You are an operations assistant. Use the provided tools and never invent tool results. "
+        "Call tools with exactly the argument names their schemas define. If a tool call returns "
+        "an error, read it, fix the arguments and try again, or explain why you cannot continue."
+    ),
     max_steps: int = 8,
     on_step: Callable[[AgentStep], None] | None = None,
 ) -> AgentTranscript:

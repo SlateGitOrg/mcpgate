@@ -27,6 +27,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
 
 from mcpgate import __version__
+from mcpgate.canonical import digest
 from mcpgate.config import HttpUpstream, StdioUpstream
 from mcpgate.errors import UpstreamError
 
@@ -115,6 +116,7 @@ class Upstream:
         self._backoff_max = backoff_max_s
         self._heartbeat = heartbeat_s
         self._client: Client | None = None
+        self._listing_digest: str | None = None
         self._ready = anyio.Event()
         self._reconnect = anyio.Event()
         self._stop = anyio.Event()
@@ -205,12 +207,17 @@ class Upstream:
                 tg.start_soon(self._heartbeat_loop, client)
 
     async def _heartbeat_loop(self, client: Client) -> None:
-        """Ping the upstream periodically so a dead session is noticed without traffic."""
+        """Re-list tools periodically.
+
+        This doubles as a liveness probe (``ping`` no longer exists on the 2026-07-28 wire) and
+        as a continuous pin check: a changed listing is published -- and therefore reconciled
+        against the pins -- without waiting for a reconnect. Unchanged listings are not
+        re-published, so the audit log is not flooded.
+        """
         while True:
             await anyio.sleep(self._heartbeat)
             try:
-                with anyio.fail_after(self._timeout):
-                    await client.send_ping()
+                await self._list_and_publish(client, force=False)
             except Exception as exc:
                 logger.warning("upstream %s missed a heartbeat: %s", self.name, _describe_exception(exc))
                 self.request_reconnect()
@@ -230,7 +237,7 @@ class Upstream:
 
     # -- tools ------------------------------------------------------------------------------
 
-    async def _list_and_publish(self, client: Client) -> None:
+    async def _list_and_publish(self, client: Client, *, force: bool = True) -> None:
         async with self._refresh_lock:
             tools: list[types.Tool] = []
             cursor: str | None = None
@@ -243,15 +250,18 @@ class Upstream:
                     break
             else:
                 raise UpstreamError(self.name, f"tools/list did not finish within {_MAX_PAGES} pages")
-            await self._on_tools(self.name, tools)
+            listing = digest([t.model_dump(by_alias=True, mode="json", exclude_none=True) for t in tools])
+            if force or listing != self._listing_digest:
+                self._listing_digest = listing
+                await self._on_tools(self.name, tools)
 
-    async def refresh(self) -> bool:
+    async def refresh(self, *, force: bool = True) -> bool:
         """Re-list tools now. Returns ``False`` (and schedules a reconnect) on failure."""
         client = self._client
         if client is None:
             return False
         try:
-            await self._list_and_publish(client)
+            await self._list_and_publish(client, force=force)
         except Exception as exc:
             logger.warning("refresh of upstream %s failed: %s", self.name, _describe_exception(exc))
             self.request_reconnect()
