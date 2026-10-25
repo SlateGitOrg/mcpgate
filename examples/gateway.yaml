@@ -1,0 +1,65 @@
+# Example mcpgate configuration fronting the two bundled sample servers.
+# Quickstart (from the repo root):
+#   uv run mcpgate keys --dir examples/var/keys
+#   INVENTORY_TOKEN=change-me uv run python -m mcpgate.samples.inventory_server --port 9101 \
+#       --require-token-env INVENTORY_TOKEN &
+#   INVENTORY_TOKEN=change-me uv run mcpgate serve -c examples/gateway.yaml
+name: mcpgate
+namespace_separator: "__"
+refresh_interval_s: 60          # re-list upstream tools (and re-check pins) this often
+
+listen:
+  host: 127.0.0.1
+  port: 8740
+  path: /mcp
+  # public_url: https://gateway.example.com/mcp   # resource identifier when behind a proxy
+
+auth:
+  issuer: https://issuer.example.test         # must equal the token's `iss`
+  jwks_file: var/keys/jwks.json               # public keys of the authorization server
+  required_scopes: ["mcp:tools"]              # 403 insufficient_scope without it
+  algorithms: [ES256, EdDSA, RS256]
+
+upstreams:
+  - name: notes
+    transport: stdio
+    command: ${PYTHON}
+    args: ["-m", "mcpgate.samples.notes_server"]
+  - name: inventory
+    transport: http
+    url: http://127.0.0.1:9101/mcp
+    headers:
+      Authorization: "Bearer ${INVENTORY_TOKEN}"   # held by the gateway, never by clients
+    timeout_s: 15
+    max_concurrency: 4
+
+policy:
+  roles:
+    analyst:
+      allow: ["inventory__get_*", "inventory__list_*", "notes__*"]
+      deny: ["notes__delete_*"]
+    operator:
+      allow: ["*"]
+  clients:
+    agent-analyst: {roles: [analyst]}
+    agent-ops: {roles: [operator]}
+  scope_roles:
+    "mcpgate:operator": operator
+
+rate_limits:
+  per_client: {rate: 5, burst: 10}
+  per_tool:
+    "inventory__adjust_*": {rate: 0.2, burst: 2}
+
+limits:
+  max_argument_bytes: 65536
+  max_argument_depth: 32
+
+pinning:
+  store: var/pins.json
+  mode: enforce            # enforce | warn
+  on_new_tool: quarantine  # quarantine | pin
+
+audit:
+  path: var/audit.jsonl
+  arguments: redacted      # digest | redacted | full

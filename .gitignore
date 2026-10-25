@@ -14,3 +14,4 @@ dist/
 # runtime state written by the gateway / demo
 /var/
 *.audit.jsonl
+examples/var/
