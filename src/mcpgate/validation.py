@@ -25,8 +25,8 @@ import jsonschema
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
 from jsonschema.protocols import Validator
-from referencing.exceptions import Unresolvable
 from referencing import Registry
+from referencing.exceptions import Unresolvable
 
 from mcpgate.canonical import canonical_bytes
 from mcpgate.config import LimitsConfig
@@ -72,16 +72,14 @@ def _depth(value: Any, limit: int) -> int:
 
 
 def _path(error: jsonschema.ValidationError) -> str:
-    parts = ["$"]
-    for part in error.absolute_path:
-        parts.append(f"[{part}]" if isinstance(part, int) else f".{part}")
-    return "".join(parts)
+    parts = [f"[{p}]" if isinstance(p, int) else f".{p}" for p in error.absolute_path]
+    return "$" + "".join(parts)
 
 
 def _describe(error: jsonschema.ValidationError) -> str:
     """A value-free description of a validation failure."""
     keyword = str(error.validator)
-    expected = error.validator_value
+    expected: Any = error.validator_value
     if keyword == "required":
         missing = [p for p in expected if isinstance(error.instance, Mapping) and p not in error.instance]
         return f"missing required properties {missing}"
@@ -89,8 +87,23 @@ def _describe(error: jsonschema.ValidationError) -> str:
         props = error.schema.get("properties", {}) if isinstance(error.schema, Mapping) else {}
         extra = sorted(k for k in error.instance if k not in props)
         return f"unexpected properties {extra}"
-    if keyword in {"type", "enum", "const", "format", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum",
-                   "minLength", "maxLength", "minItems", "maxItems", "multipleOf", "pattern", "uniqueItems"}:
+    if keyword in {
+        "type",
+        "enum",
+        "const",
+        "format",
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "minLength",
+        "maxLength",
+        "minItems",
+        "maxItems",
+        "multipleOf",
+        "pattern",
+        "uniqueItems",
+    }:
         shown = repr(expected)
         if len(shown) > 80:
             shown = shown[:77] + "..."
@@ -113,9 +126,9 @@ class ArgumentValidator:
         result: Validator | SchemaError
         try:
             cls = jsonschema.validators.validator_for(schema, default=Draft202012Validator)
-            cls.check_schema(schema)
+            cls.check_schema(dict(schema))
             format_checker = FormatChecker() if self._limits.assert_formats else None
-            result = cls(schema, format_checker=format_checker, registry=_NO_RETRIEVAL)
+            result = cls(dict(schema), format_checker=format_checker, registry=_NO_RETRIEVAL)
         except SchemaError as exc:
             result = exc
         if len(self._cache) > 4096:
@@ -128,17 +141,25 @@ class ArgumentValidator:
         compiled = self.compile(key, schema)
         return f"invalid input schema: {compiled.message}" if isinstance(compiled, SchemaError) else None
 
-    def validate(self, key: str, schema: Mapping[str, Any], arguments: Mapping[str, Any]) -> ValidationOutcome:
+    def validate(
+        self, key: str, schema: Mapping[str, Any], arguments: Mapping[str, Any]
+    ) -> ValidationOutcome:
         try:
             size = len(canonical_bytes(arguments))
         except (TypeError, ValueError) as exc:
-            return ValidationOutcome(False, (ValidationIssue("$", "json", f"arguments are not valid JSON: {exc}"),))
+            return ValidationOutcome(
+                False, (ValidationIssue("$", "json", f"arguments are not valid JSON: {exc}"),)
+            )
         if size > self._limits.max_argument_bytes:
-            issue = ValidationIssue("$", "size", f"arguments are {size} bytes; limit {self._limits.max_argument_bytes}")
+            issue = ValidationIssue(
+                "$", "size", f"arguments are {size} bytes; limit {self._limits.max_argument_bytes}"
+            )
             return ValidationOutcome(False, (issue,), size)
         depth = _depth(arguments, self._limits.max_argument_depth)
         if depth > self._limits.max_argument_depth:
-            issue = ValidationIssue("$", "depth", f"arguments nest deeper than {self._limits.max_argument_depth}")
+            issue = ValidationIssue(
+                "$", "depth", f"arguments nest deeper than {self._limits.max_argument_depth}"
+            )
             return ValidationOutcome(False, (issue,), size)
         compiled = self.compile(key, schema)
         if isinstance(compiled, SchemaError):
@@ -152,5 +173,7 @@ class ArgumentValidator:
         errors = sorted(found, key=lambda e: (list(map(str, e.absolute_path)), str(e.validator)))
         if not errors:
             return ValidationOutcome(True, (), size)
-        issues = tuple(ValidationIssue(_path(e), str(e.validator), _describe(e)) for e in errors[:_MAX_ISSUES])
+        issues = tuple(
+            ValidationIssue(_path(e), str(e.validator), _describe(e)) for e in errors[:_MAX_ISSUES]
+        )
         return ValidationOutcome(False, issues, size)

@@ -8,11 +8,16 @@ from mcpgate.policy import PolicyEngine
 
 CFG = PolicyConfig(
     roles={
-        "analyst": RoleConfig(allow=["inventory__get_*", "inventory__list_*", "notes__*"], deny=["notes__delete_*"]),
+        "analyst": RoleConfig(
+            allow=["inventory__get_*", "inventory__list_*", "notes__*"], deny=["notes__delete_*"]
+        ),
         "operator": RoleConfig(allow=["*"]),
         "no-writes": RoleConfig(deny=["*__adjust_*", "*__delete_*"]),
     },
-    clients={"agent-analyst": ClientBinding(roles=["analyst"]), "agent-ops": ClientBinding(roles=["operator"])},
+    clients={
+        "agent-analyst": ClientBinding(roles=["analyst"]),
+        "agent-ops": ClientBinding(roles=["operator"]),
+    },
     scope_roles={"mcpgate:operator": "operator", "mcpgate:readonly": "no-writes"},
 )
 
@@ -45,7 +50,10 @@ def test_scope_granted_roles_and_deny_precedence() -> None:
 
 def test_visible_filters_catalog() -> None:
     tools = ["inventory__get_stock", "inventory__adjust_stock", "notes__add_note", "notes__delete_note"]
-    assert PolicyEngine(CFG).visible("agent-analyst", [], tools) == ["inventory__get_stock", "notes__add_note"]
+    assert PolicyEngine(CFG).visible("agent-analyst", [], tools) == [
+        "inventory__get_stock",
+        "notes__add_note",
+    ]
 
 
 def test_matching_is_case_sensitive() -> None:

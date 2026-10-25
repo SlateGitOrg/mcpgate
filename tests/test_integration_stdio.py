@@ -20,8 +20,15 @@ async def test_crashed_stdio_upstream_is_restarted(tmp_path: Path) -> None:
     cfg = parse_config(
         {
             "refresh_interval_s": 0,
-            "upstreams": [{"name": "crashy", "transport": "stdio", "command": "${PYTHON}", "args": [str(FIXTURE)],
-                           "timeout_s": 5}],
+            "upstreams": [
+                {
+                    "name": "crashy",
+                    "transport": "stdio",
+                    "command": "${PYTHON}",
+                    "args": [str(FIXTURE)],
+                    "timeout_s": 5,
+                }
+            ],
             "policy": {"roles": {"all": {"allow": ["*"]}}, "clients": {"local": {"roles": ["all"]}}},
         },
         tmp_path,

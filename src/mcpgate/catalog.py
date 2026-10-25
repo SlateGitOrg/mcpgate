@@ -109,7 +109,9 @@ class Catalog:
 
     def names_outside(self, upstream: str) -> list[str]:
         """Original tool names of every *other* upstream (for cross-tool reference linting)."""
-        return [e.original for up, tools in self._by_upstream.items() if up != upstream for e in tools.values()]
+        return [
+            e.original for up, tools in self._by_upstream.items() if up != upstream for e in tools.values()
+        ]
 
     def __len__(self) -> int:
         return len(self._index)

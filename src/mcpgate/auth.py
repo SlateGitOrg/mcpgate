@@ -161,7 +161,7 @@ class JWKSStore:
         except AuthError as exc:
             # Keep serving with the last good key set rather than failing open or closed on a
             # half-written file; the next request retries after the interval.
-            logger.error("JWKS reload failed, keeping previous keys: %s", exc)
+            logger.warning("JWKS reload failed, keeping previous keys: %s", exc)
             self._last_load = self._monotonic()
 
 
@@ -180,7 +180,9 @@ class JWTVerifier:
         self._cfg = config
         self._audience = audience
         self._clock = clock
-        self._jwks = jwks or JWKSStore(config.jwks_file, min_reload_interval_s=config.jwks_reload_min_interval_s)
+        self._jwks = jwks or JWKSStore(
+            config.jwks_file, min_reload_interval_s=config.jwks_reload_min_interval_s
+        )
         self._on_reject = on_reject
         self._accepted_typ = {t.lower().removeprefix("application/") for t in config.accepted_typ}
 
@@ -228,7 +230,9 @@ class JWTVerifier:
         if jwk is None:
             raise AuthError("unknown_key", f"no signing key for kid {kid!r}")
         if jwk.algorithm_name != alg:
-            raise AuthError("algorithm_mismatch", f"key {kid!r} is for {jwk.algorithm_name}, token uses {alg}")
+            raise AuthError(
+                "algorithm_mismatch", f"key {kid!r} is for {jwk.algorithm_name}, token uses {alg}"
+            )
         try:
             claims: dict[str, Any] = jwt.decode(
                 token,
@@ -282,7 +286,7 @@ class JWTVerifier:
         if not isinstance(client_id, str) or not client_id:
             raise AuthError("missing_claim", "client_id (or azp) must be a non-empty string")
         scopes = _scopes(claims)
-        kept = {k: claims[k] for k in ("iss", "jti", "iat") if k in claims}
+        kept: dict[str, Any] = {k: claims[k] for k in ("iss", "jti", "iat") if k in claims}
         return AccessToken(
             token=token,
             client_id=client_id,

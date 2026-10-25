@@ -125,7 +125,9 @@ async def run_agent(
             {
                 "role": "assistant",
                 "content": turn.content,
-                "tool_calls": [{"function": {"name": c.name, "arguments": c.arguments}} for c in turn.tool_calls],
+                "tool_calls": [
+                    {"function": {"name": c.name, "arguments": c.arguments}} for c in turn.tool_calls
+                ],
             }
         )
         for call in turn.tool_calls:

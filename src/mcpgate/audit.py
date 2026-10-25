@@ -69,7 +69,9 @@ def _redact(value: Any, secret_keys: tuple[str, ...], depth: int = 0) -> Any:
     return value
 
 
-def summarize_arguments(arguments: Mapping[str, Any] | None, mode: str, secret_keys: Iterable[str]) -> dict[str, Any]:
+def summarize_arguments(
+    arguments: Mapping[str, Any] | None, mode: str, secret_keys: Iterable[str]
+) -> dict[str, Any]:
     """Represent call arguments in the audit record according to the configured mode."""
     args = dict(arguments or {})
     try:
@@ -196,9 +198,13 @@ def verify_chain(path: Path, *, expect_head: str | None = None) -> ChainReport:
             if not isinstance(record, dict) or "hash" not in record:
                 return ChainReport(False, count, prev, "record has no hash", number)
             if record.get("seq") != expected_seq:
-                return ChainReport(False, count, prev, f"expected seq {expected_seq}, found {record.get('seq')}", number)
+                return ChainReport(
+                    False, count, prev, f"expected seq {expected_seq}, found {record.get('seq')}", number
+                )
             if record.get("prev") != prev:
-                return ChainReport(False, count, prev, "prev does not match the previous record's hash", number)
+                return ChainReport(
+                    False, count, prev, "prev does not match the previous record's hash", number
+                )
             if _record_hash(record) != record["hash"]:
                 return ChainReport(False, count, prev, "record content does not match its hash", number)
             prev = record["hash"]
@@ -207,5 +213,7 @@ def verify_chain(path: Path, *, expect_head: str | None = None) -> ChainReport:
     except FileNotFoundError:
         return ChainReport(False, 0, GENESIS, "audit log does not exist")
     if expect_head is not None and expect_head != prev:
-        return ChainReport(False, count, prev, "head differs from the expected anchor (log truncated or replaced?)")
+        return ChainReport(
+            False, count, prev, "head differs from the expected anchor (log truncated or replaced?)"
+        )
     return ChainReport(True, count, prev)

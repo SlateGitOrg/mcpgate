@@ -222,8 +222,8 @@ class Upstream:
     def request_reconnect(self) -> None:
         self._reconnect.set()
 
-    async def wait_ready(self, timeout: float) -> bool:
-        with anyio.move_on_after(timeout):
+    async def wait_ready(self, within_s: float) -> bool:
+        with anyio.move_on_after(within_s):
             await self._ready.wait()
             return True
         return False
@@ -279,7 +279,9 @@ class Upstream:
                 if exc.code == types.REQUEST_TIMEOUT:
                     raise UpstreamError(self.name, f"timed out after {self._timeout:g}s") from None
                 return types.CallToolResult(
-                    content=[types.TextContent(type="text", text=f"upstream error {exc.code}: {exc.message}")],
+                    content=[
+                        types.TextContent(type="text", text=f"upstream error {exc.code}: {exc.message}")
+                    ],
                     is_error=True,
                 )
             except TimeoutError:
@@ -295,4 +297,3 @@ def _describe_exception(exc: BaseException) -> str:
         return "; ".join(_describe_exception(e) for e in exc.exceptions)
     text = str(exc) or type(exc).__name__
     return f"{type(exc).__name__}: {text}" if not text.startswith(type(exc).__name__) else text
-

@@ -6,7 +6,7 @@ from mcpgate.catalog import META_PIN, META_UPSTREAM, Catalog, decode_cursor, enc
 
 
 def tool(name: str) -> types.Tool:
-    return types.Tool(name=name, input_schema={"type": "object"}, meta={"upstream-own": 1})
+    return types.Tool(name=name, input_schema={"type": "object"}, _meta={"upstream-own": 1})
 
 
 def test_namespacing_and_split() -> None:

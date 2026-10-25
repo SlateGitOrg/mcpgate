@@ -59,7 +59,9 @@ class PolicyEngine:
             role = self._cfg.roles[role_name]
             for pattern in role.deny:
                 if fnmatchcase(tool, pattern):
-                    return Decision(False, f"denied by role {role_name!r}", roles, f"{role_name}:deny:{pattern}")
+                    return Decision(
+                        False, f"denied by role {role_name!r}", roles, f"{role_name}:deny:{pattern}"
+                    )
             if allow_rule is None:
                 for pattern in role.allow:
                     if fnmatchcase(tool, pattern):

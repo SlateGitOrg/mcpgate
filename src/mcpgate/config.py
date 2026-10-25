@@ -197,7 +197,15 @@ class AuditConfig(_Model):
     arguments: Literal["digest", "redacted", "full"] = "digest"
     fsync: bool = False
     redact_keys: list[str] = Field(
-        default_factory=lambda: ["password", "secret", "token", "api_key", "apikey", "authorization", "cookie"]
+        default_factory=lambda: [
+            "password",
+            "secret",
+            "token",
+            "api_key",
+            "apikey",
+            "authorization",
+            "cookie",
+        ]
     )
 
 
@@ -291,7 +299,9 @@ def _resolve_paths(cfg: GatewayConfig, base: Path) -> GatewayConfig:
     return cfg.model_copy(update=updates)
 
 
-def parse_config(data: Mapping[str, Any], base_dir: Path, env: Mapping[str, str] | None = None) -> GatewayConfig:
+def parse_config(
+    data: Mapping[str, Any], base_dir: Path, env: Mapping[str, str] | None = None
+) -> GatewayConfig:
     """Validate an already-parsed mapping. Relative paths resolve against ``base_dir``."""
     expanded = _expand(dict(data), os.environ if env is None else env)
     try:

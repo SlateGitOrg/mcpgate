@@ -29,7 +29,11 @@ PIN_FIELDS: tuple[str, ...] = ("name", "title", "description", "inputSchema", "o
 
 def pinned_view(tool: types.Tool | Mapping[str, Any]) -> dict[str, Any]:
     """The subset of a tool definition covered by the pin, in wire (camelCase) form."""
-    wire = tool.model_dump(by_alias=True, mode="json", exclude_none=True) if isinstance(tool, types.Tool) else tool
+    wire = (
+        tool.model_dump(by_alias=True, mode="json", exclude_none=True)
+        if isinstance(tool, types.Tool)
+        else tool
+    )
     return {k: wire[k] for k in PIN_FIELDS if k in wire and wire[k] is not None}
 
 
@@ -48,7 +52,9 @@ class Fingerprint:
 
     @classmethod
     def from_json(cls, data: Mapping[str, Any]) -> Fingerprint:
-        return cls(digest=str(data["digest"]), fields=dict(data["fields"]), definition=dict(data["definition"]))
+        return cls(
+            digest=str(data["digest"]), fields=dict(data["fields"]), definition=dict(data["definition"])
+        )
 
 
 def fingerprint(tool: types.Tool | Mapping[str, Any]) -> Fingerprint:

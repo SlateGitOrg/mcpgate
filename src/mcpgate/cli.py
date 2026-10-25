@@ -66,9 +66,12 @@ def cmd_check_config(args: argparse.Namespace) -> int:
     cfg = _config(args)
     _out(f"config OK: {args.config}")
     _out(f"  listen      {cfg.listen.resource_url}")
-    _out(f"  auth        {'JWT via ' + cfg.auth.jwks_file.name if cfg.auth and cfg.auth.enabled else 'DISABLED'}")
+    auth = f"JWT via {cfg.auth.jwks_file.name}" if cfg.auth and cfg.auth.enabled else "DISABLED"
+    _out(f"  auth        {auth}")
     for up in cfg.upstreams:
-        target = getattr(up, "url", None) or " ".join([Path(getattr(up, "command", "")).name, *getattr(up, "args", [])])
+        target = getattr(up, "url", None) or " ".join(
+            [Path(getattr(up, "command", "")).name, *getattr(up, "args", [])]
+        )
         _out(f"  upstream    {up.name:<12} {up.transport:<5} {target}")
     _out(f"  roles       {', '.join(sorted(cfg.policy.roles)) or '(none: every call is denied)'}")
     _out(f"  clients     {', '.join(sorted(cfg.policy.clients)) or '(none)'}")
@@ -86,7 +89,9 @@ def cmd_catalog(args: argparse.Namespace) -> int:
         async with gateway.running(startup_timeout_s=args.timeout):
             for entry in gateway.catalog.entries():
                 status = gateway.pins.status(entry.upstream, entry.original, entry.fingerprint)
-                findings = lint_definition(entry.fingerprint.definition, gateway.catalog.names_outside(entry.upstream))
+                findings = lint_definition(
+                    entry.fingerprint.definition, gateway.catalog.names_outside(entry.upstream)
+                )
                 rows.append(
                     {
                         "name": entry.name,
@@ -186,7 +191,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 def cmd_keys(args: argparse.Namespace) -> int:
     issuer = generate_keys(Path(args.dir), alg=args.alg, kid=args.kid)
-    _out(f"wrote {Path(args.dir) / 'signing-key.pem'} (0600) and {Path(args.dir) / 'jwks.json'} (kid {issuer.kid})")
+    directory = Path(args.dir)
+    _out(f"wrote {directory / 'signing-key.pem'} (0600) and {directory / 'jwks.json'} (kid {issuer.kid})")
     return 0
 
 
@@ -214,14 +220,18 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def with_config(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
-        p.add_argument("-c", "--config", default="gateway.yaml", help="gateway config (default: gateway.yaml)")
+        p.add_argument(
+            "-c", "--config", default="gateway.yaml", help="gateway config (default: gateway.yaml)"
+        )
         return p
 
     serve = with_config(sub.add_parser("serve", help="run the gateway"))
     serve.add_argument("--transport", choices=["http", "stdio"], default="http")
     serve.set_defaults(func=cmd_serve)
 
-    with_config(sub.add_parser("check-config", help="validate a config file")).set_defaults(func=cmd_check_config)
+    with_config(sub.add_parser("check-config", help="validate a config file")).set_defaults(
+        func=cmd_check_config
+    )
 
     catalog = with_config(sub.add_parser("catalog", help="print the aggregated catalog with pin status"))
     catalog.add_argument("--json", action="store_true")
@@ -271,8 +281,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    logging.basicConfig(level=args.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-                        stream=sys.stderr)
+    logging.basicConfig(
+        level=args.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr
+    )
     if getattr(args, "pins_cmd", None) == "approve" and not args.all and not args.tool:
         _out("error: name a tool or pass --all")
         return 2

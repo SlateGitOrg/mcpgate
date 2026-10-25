@@ -69,7 +69,11 @@ def generate_keys(directory: Path, *, alg: KeyAlgorithm = "ES256", kid: str | No
     jwks_path = directory / "jwks.json"
     existing: list[dict[str, Any]] = []
     if jwks_path.exists():
-        existing = [k for k in json.loads(jwks_path.read_text(encoding="utf-8")).get("keys", []) if k.get("kid") != kid]
+        existing = [
+            k
+            for k in json.loads(jwks_path.read_text(encoding="utf-8")).get("keys", [])
+            if k.get("kid") != kid
+        ]
     jwks = {"keys": [*existing, _public_jwk(key, kid, alg)]}
     tmp = jwks_path.with_suffix(".tmp")
     tmp.write_text(json.dumps(jwks, indent=2) + "\n", encoding="utf-8")
@@ -90,7 +94,7 @@ class DevIssuer:
         meta = json.loads((directory / "signing-key.json").read_text(encoding="utf-8"))
         key = serialization.load_pem_private_key((directory / "signing-key.pem").read_bytes(), password=None)
         if not isinstance(key, ec.EllipticCurvePrivateKey | ed25519.Ed25519PrivateKey):
-            raise ValueError("signing-key.pem must hold an EC P-256 or Ed25519 private key")
+            raise TypeError("signing-key.pem must hold an EC P-256 or Ed25519 private key")
         return cls(key=key, kid=str(meta["kid"]), alg=meta["alg"])
 
     def mint(

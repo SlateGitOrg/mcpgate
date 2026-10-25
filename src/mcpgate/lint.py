@@ -26,20 +26,44 @@ Severity = Literal["high", "medium", "low"]
 _INVISIBLE = re.compile("[​-‏‪-‮⁠-⁤⁦-⁩﻿\U000e0000-\U000e007f]")
 
 _PATTERNS: tuple[tuple[str, Severity, re.Pattern[str]], ...] = (
-    ("instruction_override", "high",
-     re.compile(r"ignore (all |any )?(previous|prior|above|earlier) (instructions|rules|messages)", re.I)),
-    ("concealment", "high",
-     re.compile(r"(do not|don't|never) (tell|mention|inform|reveal|show)[^.]{0,40}\b(user|human)", re.I)),
-    ("hidden_directive_tag", "medium",
-     re.compile(r"<\s*/?\s*(important|system|instructions?|secret|hidden)\s*>", re.I)),
-    ("sensitive_path", "high",
-     re.compile(r"(~/\.ssh|id_rsa|id_ed25519|/etc/passwd|/etc/shadow|\.aws/credentials|\.env\b|"
-                r"mcp\.json|\.netrc|private[ _-]?key)", re.I)),
-    ("exfiltration_hint", "medium",
-     re.compile(r"(send|post|upload|forward|include)[^.]{0,60}\b(contents?|secrets?|credentials?|tokens?|"
-                r"conversation|chat history)\b", re.I)),
-    ("model_directed_imperative", "low",
-     re.compile(r"\b(before|after) (using|calling) (this|any other) tool\b", re.I)),
+    (
+        "instruction_override",
+        "high",
+        re.compile(r"ignore (all |any )?(previous|prior|above|earlier) (instructions|rules|messages)", re.I),
+    ),
+    (
+        "concealment",
+        "high",
+        re.compile(r"(do not|don't|never) (tell|mention|inform|reveal|show)[^.]{0,40}\b(user|human)", re.I),
+    ),
+    (
+        "hidden_directive_tag",
+        "medium",
+        re.compile(r"<\s*/?\s*(important|system|instructions?|secret|hidden)\s*>", re.I),
+    ),
+    (
+        "sensitive_path",
+        "high",
+        re.compile(
+            r"(~/\.ssh|id_rsa|id_ed25519|/etc/passwd|/etc/shadow|\.aws/credentials|\.env\b|"
+            r"mcp\.json|\.netrc|private[ _-]?key)",
+            re.I,
+        ),
+    ),
+    (
+        "exfiltration_hint",
+        "medium",
+        re.compile(
+            r"(send|post|upload|forward|include)[^.]{0,60}\b(contents?|secrets?|credentials?|tokens?|"
+            r"conversation|chat history)\b",
+            re.I,
+        ),
+    ),
+    (
+        "model_directed_imperative",
+        "low",
+        re.compile(r"\b(before|after) (using|calling) (this|any other) tool\b", re.I),
+    ),
 )
 
 _MAX_DESCRIPTION_CHARS = 2000
@@ -90,7 +114,9 @@ def lint_definition(definition: Mapping[str, Any], other_tools: Iterable[str] = 
                 findings.append(LintFinding(rule, severity, loc, _excerpt(text, match.start(), match.end())))
         for other in others:
             if other in text:
-                findings.append(LintFinding("cross_tool_reference", "medium", loc, f"mentions tool {other!r}"))
+                findings.append(
+                    LintFinding("cross_tool_reference", "medium", loc, f"mentions tool {other!r}")
+                )
                 break
     description = definition.get("description")
     if isinstance(description, str) and len(description) > _MAX_DESCRIPTION_CHARS:

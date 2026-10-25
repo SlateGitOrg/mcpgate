@@ -109,8 +109,10 @@ class PinStore:
             data = json.loads(raw)
         except ValueError as exc:
             raise PinStoreError(f"pin store {self.path} is not valid JSON: {exc}") from exc
-        if not isinstance(data, dict) or data.get("version") != STORE_VERSION or not isinstance(
-            data.get("upstreams"), dict
+        if (
+            not isinstance(data, dict)
+            or data.get("version") != STORE_VERSION
+            or not isinstance(data.get("upstreams"), dict)
         ):
             raise PinStoreError(f"pin store {self.path} has an unsupported layout")
         return data
@@ -156,7 +158,7 @@ class PinManager:
                 self._data = self.store.read()
                 self._mtime = mtime
             except PinStoreError as exc:
-                logger.error("pin store reload failed, keeping previous pins: %s", exc)
+                logger.warning("pin store reload failed, keeping previous pins: %s", exc)
 
     def _pins(self, upstream: str) -> Mapping[str, Any] | None:
         entry = self._data["upstreams"].get(upstream)
@@ -241,9 +243,7 @@ class PinManager:
                 events.append(PinEvent("changed", upstream, name, "high", detail))
         removed = sorted(set(tools) - set(observed))
         missing_before = set(entry.get("missing", []))
-        for name in removed:
-            if name not in missing_before:
-                events.append(PinEvent("removed", upstream, name, "medium"))
+        events.extend(PinEvent("removed", upstream, n, "medium") for n in removed if n not in missing_before)
         entry["missing"] = removed
         for name in list(pending):
             if name not in observed:
@@ -278,4 +278,5 @@ class PinManager:
     def snapshot(self) -> dict[str, Any]:
         """The current store document (for ``mcpgate pins status``)."""
         self._refresh_if_stale()
-        return json.loads(json.dumps(self._data))
+        copied: dict[str, Any] = json.loads(json.dumps(self._data))
+        return copied

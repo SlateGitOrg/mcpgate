@@ -11,11 +11,19 @@ from mcpgate.errors import ConfigError
 BASE = {
     "upstreams": [
         {"name": "notes", "transport": "stdio", "command": "${PYTHON}", "args": ["-m", "x"]},
-        {"name": "inventory", "transport": "http", "url": "http://127.0.0.1:9/mcp",
-         "headers": {"Authorization": "Bearer ${UP_TOKEN}"}},
+        {
+            "name": "inventory",
+            "transport": "http",
+            "url": "http://127.0.0.1:9/mcp",
+            "headers": {"Authorization": "Bearer ${UP_TOKEN}"},
+        },
     ],
     "auth": {"issuer": "https://issuer.test", "jwks_file": "keys/jwks.json"},
-    "policy": {"roles": {"r": {"allow": ["*"]}}, "clients": {"c": {"roles": ["r"]}}, "scope_roles": {"s": "r"}},
+    "policy": {
+        "roles": {"r": {"allow": ["*"]}},
+        "clients": {"c": {"roles": ["r"]}},
+        "scope_roles": {"s": "r"},
+    },
 }
 
 

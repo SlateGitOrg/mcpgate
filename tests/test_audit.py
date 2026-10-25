@@ -99,13 +99,18 @@ def test_listeners_and_failing_listener(tmp_path: Path) -> None:
     log = log_at(tmp_path / "a.jsonl")
     seen: list[str] = []
     log.subscribe(lambda r: seen.append(r["event"]))
-    log.subscribe(lambda r: 1 / 0)  # type: ignore[arg-type,return-value]
+    log.subscribe(lambda r: 1 / 0)  # type: ignore[arg-type]
     log.write("x")
     assert seen == ["x"]
 
 
 def test_argument_summaries() -> None:
-    args = {"user": "bob", "api_key": "sk-123", "body": "x" * 300, "nested": {"Password": "p", "ok": [1] * 60}}
+    args = {
+        "user": "bob",
+        "api_key": "sk-123",
+        "body": "x" * 300,
+        "nested": {"Password": "p", "ok": [1] * 60},
+    }
     digest_only = summarize_arguments(args, "digest", ["api_key", "password"])
     assert set(digest_only) == {"args_digest", "arg_keys"}
     redacted = summarize_arguments(args, "redacted", ["API_KEY", "password"])["args"]

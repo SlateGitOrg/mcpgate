@@ -65,7 +65,7 @@ def _error_result(text: str, **meta: Any) -> types.CallToolResult:
     return types.CallToolResult(
         content=[types.TextContent(type="text", text=f"mcpgate: {text}")],
         is_error=True,
-        meta={"io.github.mcpgate/decision": meta} if meta else None,
+        _meta={"io.github.mcpgate/decision": meta} if meta else None,
     )
 
 
@@ -159,7 +159,9 @@ class Gateway:
         if any(e.kind == "tofu" for e in events):
             targets = {e.original for e in self.catalog.entries(upstream)}
         else:
-            targets = {e.tool for e in events if e.tool and e.kind in {"changed", "new_tool", "new_tool_pinned"}}
+            targets = {
+                e.tool for e in events if e.tool and e.kind in {"changed", "new_tool", "new_tool_pinned"}
+            }
         others = self.catalog.names_outside(upstream)
         for entry in self.catalog.entries(upstream):
             if entry.original not in targets:
@@ -265,8 +267,8 @@ class Gateway:
         if self.pins.blocks(status):
             audit("quarantined", pin_status=status.value)
             return _error_result(
-                f"tool {entry.name} is quarantined: its definition ({status.value}) differs from the approved "
-                "pin. An operator must review it (mcpgate pins diff/approve).",
+                f"tool {entry.name} is quarantined: its definition ({status.value}) differs from the "
+                "approved pin. An operator must review it (mcpgate pins diff/approve).",
                 decision="quarantined",
             )
 
@@ -288,7 +290,9 @@ class Gateway:
         if not outcome.ok:
             issues = [{"path": i.path, "keyword": i.keyword, "message": i.message} for i in outcome.issues]
             audit("invalid_arguments", issues=issues)
-            return _error_result(f"invalid arguments for {entry.name}: {outcome.summary()}", decision="invalid")
+            return _error_result(
+                f"invalid arguments for {entry.name}: {outcome.summary()}", decision="invalid"
+            )
 
         try:
             result = await upstream.call_tool(entry.original, arguments)
@@ -395,7 +399,7 @@ class Gateway:
                 tg.cancel_scope.cancel()
 
             tg.start_soon(run)
-            while not server.started:
+            while not server.started:  # noqa: ASYNC110 -- uvicorn exposes a flag, not an event
                 await anyio.sleep(0.02)
             logger.info("mcpgate listening on http://%s:%s%s", listen.host, listen.port, listen.path)
             if ready is not None:

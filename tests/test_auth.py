@@ -68,7 +68,9 @@ async def test_sdk_hook_returns_none_on_failure(issuer: DevIssuer, auth_config: 
         ({"headers": {"kid": "nope"}}, "unknown_key"),
     ],
 )
-def test_rejections(issuer: DevIssuer, auth_config: AuthConfig, kwargs: dict[str, object], reason: str) -> None:
+def test_rejections(
+    issuer: DevIssuer, auth_config: AuthConfig, kwargs: dict[str, object], reason: str
+) -> None:
     assert _reason(JWTVerifier(auth_config, AUDIENCE), _mint(issuer, **kwargs)) == reason
 
 
@@ -99,7 +101,15 @@ def test_missing_required_claims(issuer: DevIssuer, auth_config: AuthConfig) -> 
 
 def test_azp_and_scp_fallbacks(issuer: DevIssuer, auth_config: AuthConfig) -> None:
     now = int(time.time())
-    claims = {"iss": ISSUER, "aud": AUDIENCE, "sub": "s", "azp": "web", "scp": ["x", "y"], "iat": now, "exp": now + 60}
+    claims = {
+        "iss": ISSUER,
+        "aud": AUDIENCE,
+        "sub": "s",
+        "azp": "web",
+        "scp": ["x", "y"],
+        "iat": now,
+        "exp": now + 60,
+    }
     token = jwt.encode(claims, issuer.key, algorithm="ES256", headers={"kid": "k1"})
     access = JWTVerifier(auth_config, AUDIENCE).verify(token)
     assert access.client_id == "web"
@@ -132,14 +142,21 @@ def test_hmac_key_confusion_is_refused(issuer: DevIssuer, auth_config: AuthConfi
 def test_tampered_payload_fails_signature(issuer: DevIssuer, auth_config: AuthConfig) -> None:
     head, _, sig = _mint(issuer).split(".")
     now = int(time.time())
-    forged = {"iss": ISSUER, "aud": AUDIENCE, "sub": "root", "client_id": "admin", "iat": now, "exp": now + 60}
+    forged = {
+        "iss": ISSUER,
+        "aud": AUDIENCE,
+        "sub": "root",
+        "client_id": "admin",
+        "iat": now,
+        "exp": now + 60,
+    }
     token = f"{head}.{_b64(forged)}.{sig}"
     assert _reason(JWTVerifier(auth_config, AUDIENCE), token) == "bad_signature"
 
 
 def test_algorithm_mismatch_between_header_and_key(issuer: DevIssuer, auth_config: AuthConfig) -> None:
     token = _mint(issuer)
-    head, body, sig = token.split(".")
+    _, body, sig = token.split(".")
     token = f"{_b64({'alg': 'EdDSA', 'kid': 'k1', 'typ': 'at+jwt'})}.{body}.{sig}"
     assert _reason(JWTVerifier(auth_config, AUDIENCE), token) == "algorithm_mismatch"
 

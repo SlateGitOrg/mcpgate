@@ -19,10 +19,10 @@ import pytest
 from mcp.shared.exceptions import MCPError
 
 from mcpgate.client import connect_gateway
+from mcpgate.config import parse_config
 from mcpgate.devissuer import DevIssuer, generate_keys
 from mcpgate.gateway import Gateway
 from tests.helpers import POLICY
-from mcpgate.config import parse_config
 
 pytestmark = [pytest.mark.anyio, pytest.mark.integration]
 
@@ -55,9 +55,20 @@ class InventoryProcess:
     def start(self) -> None:
         env = {**os.environ, "INVENTORY_TOKEN": UPSTREAM_SECRET}
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "mcpgate.samples.inventory_server", "--port", str(self.port),
-             "--variant-file", str(self.variant_file), "--require-token-env", "INVENTORY_TOKEN"],
-            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            [
+                sys.executable,
+                "-m",
+                "mcpgate.samples.inventory_server",
+                "--port",
+                str(self.port),
+                "--variant-file",
+                str(self.variant_file),
+                "--require-token-env",
+                "INVENTORY_TOKEN",
+            ],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         wait_port(self.port)
 
@@ -85,7 +96,12 @@ class Env:
         self.signer = signer
 
     def token(self, client_id: str, scopes: tuple[str, ...] = ("mcp:tools",), **kw: Any) -> str:
-        args: dict[str, Any] = {"issuer": ISSUER, "audience": self.url, "client_id": client_id, "scopes": scopes}
+        args: dict[str, Any] = {
+            "issuer": ISSUER,
+            "audience": self.url,
+            "client_id": client_id,
+            "scopes": scopes,
+        }
         args.update(kw)
         return self.signer.mint(**args)
 
@@ -103,10 +119,19 @@ async def env(tmp_path: Path, inventory: InventoryProcess) -> AsyncIterator[Env]
             "listen": {"host": "127.0.0.1", "port": port},
             "auth": {"issuer": ISSUER, "jwks_file": "keys/jwks.json"},
             "upstreams": [
-                {"name": "notes", "transport": "stdio", "command": "${PYTHON}",
-                 "args": ["-m", "mcpgate.samples.notes_server"]},
-                {"name": "inventory", "transport": "http", "url": f"http://127.0.0.1:{inventory.port}/mcp",
-                 "headers": {"Authorization": "Bearer ${INVENTORY_TOKEN}"}, "timeout_s": 10},
+                {
+                    "name": "notes",
+                    "transport": "stdio",
+                    "command": "${PYTHON}",
+                    "args": ["-m", "mcpgate.samples.notes_server"],
+                },
+                {
+                    "name": "inventory",
+                    "transport": "http",
+                    "url": f"http://127.0.0.1:{inventory.port}/mcp",
+                    "headers": {"Authorization": "Bearer ${INVENTORY_TOKEN}"},
+                    "timeout_s": 10,
+                },
             ],
             "policy": POLICY,
             "rate_limits": {"per_client": {"rate": 100, "burst": 100}},
@@ -132,10 +157,14 @@ async def test_requests_without_valid_tokens_are_refused(env: Env) -> None:
         assert missing.status_code == 401
         assert "resource_metadata=" in missing.headers["www-authenticate"]
         wrong_aud = env.token("agent-analyst", audience="http://some-other-mcp-server/mcp")
-        rejected = await http.post(env.url, json=body, headers={**headers, "authorization": f"Bearer {wrong_aud}"})
+        rejected = await http.post(
+            env.url, json=body, headers={**headers, "authorization": f"Bearer {wrong_aud}"}
+        )
         assert rejected.status_code == 401
         no_scope = env.token("agent-analyst", scopes=("profile",))
-        forbidden = await http.post(env.url, json=body, headers={**headers, "authorization": f"Bearer {no_scope}"})
+        forbidden = await http.post(
+            env.url, json=body, headers={**headers, "authorization": f"Bearer {no_scope}"}
+        )
         assert forbidden.status_code == 403
         assert "insufficient_scope" in forbidden.headers["www-authenticate"]
         meta = await http.get(env.url.replace("/mcp", "/.well-known/oauth-protected-resource/mcp"))
@@ -159,16 +188,22 @@ async def test_rbac_over_both_transports_and_protocol_eras(env: Env, mode: str) 
         note = await client.call_tool("notes__add_note", {"title": "t", "body": "b"})  # stdio upstream
         assert note.structured_content is not None and note.structured_content["id"] == 3
         with pytest.raises(MCPError, match="not found or not permitted"):
-            await client.call_tool("inventory__adjust_stock", {"sku": "SKU-002", "delta": 5, "reason": "restock"})
+            await client.call_tool(
+                "inventory__adjust_stock", {"sku": "SKU-002", "delta": 5, "reason": "restock"}
+            )
     # a role granted through a token scope
-    async with connect_gateway(env.url, env.token("someone", scopes=("mcp:tools", "mcpgate:operator")),
-                               mode=mode) as client:
-        adjusted = await client.call_tool("inventory__adjust_stock", {"sku": "SKU-002", "delta": 5,
-                                                                      "reason": "restock"})
+    async with connect_gateway(
+        env.url, env.token("someone", scopes=("mcp:tools", "mcpgate:operator")), mode=mode
+    ) as client:
+        adjusted = await client.call_tool(
+            "inventory__adjust_stock", {"sku": "SKU-002", "delta": 5, "reason": "restock"}
+        )
         assert adjusted.structured_content == {"sku": "SKU-002", "on_hand": 12, "reason": "restock"}
     calls = [r for r in env.audit() if r["event"] == "tool_call"]
     assert [(c["client_id"], c["decision"]) for c in calls] == [
-        ("agent-analyst", "allowed"), ("agent-analyst", "allowed"), ("agent-analyst", "denied_policy"),
+        ("agent-analyst", "allowed"),
+        ("agent-analyst", "allowed"),
+        ("agent-analyst", "denied_policy"),
         ("someone", "allowed"),
     ]
     assert calls[0]["sub"] == "user:agent-analyst"
@@ -177,7 +212,9 @@ async def test_rbac_over_both_transports_and_protocol_eras(env: Env, mode: str) 
 async def test_http_upstream_rug_pull_is_quarantined(env: Env, inventory: InventoryProcess) -> None:
     ops = env.token("agent-ops")
     async with connect_gateway(env.url, ops) as client:
-        ok = await client.call_tool("inventory__adjust_stock", {"sku": "SKU-001", "delta": 1, "reason": "count"})
+        ok = await client.call_tool(
+            "inventory__adjust_stock", {"sku": "SKU-001", "delta": 1, "reason": "count"}
+        )
         assert not ok.is_error
         # restart the upstream with a silently loosened schema on the same port
         inventory.stop()

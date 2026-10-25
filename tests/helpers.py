@@ -14,7 +14,10 @@ from mcpgate.config import GatewayConfig, parse_config
 
 POLICY: dict[str, Any] = {
     "roles": {
-        "analyst": {"allow": ["inventory__get_*", "inventory__list_*", "notes__*"], "deny": ["notes__delete_*"]},
+        "analyst": {
+            "allow": ["inventory__get_*", "inventory__list_*", "notes__*"],
+            "deny": ["notes__delete_*"],
+        },
         "operator": {"allow": ["*"]},
     },
     "clients": {"agent-analyst": {"roles": ["analyst"]}, "agent-ops": {"roles": ["operator"]}},
@@ -26,8 +29,12 @@ def gateway_config(tmp_path: Path, **overrides: Any) -> GatewayConfig:
     data: dict[str, Any] = {
         "refresh_interval_s": 0,
         "upstreams": [
-            {"name": "notes", "transport": "stdio", "command": "${PYTHON}",
-             "args": ["-m", "mcpgate.samples.notes_server"]},
+            {
+                "name": "notes",
+                "transport": "stdio",
+                "command": "${PYTHON}",
+                "args": ["-m", "mcpgate.samples.notes_server"],
+            },
             {"name": "inventory", "transport": "http", "url": "http://127.0.0.1:1/mcp"},
         ],
         "policy": POLICY,

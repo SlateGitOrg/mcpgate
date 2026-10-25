@@ -24,7 +24,7 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-__all__ = ["canonical_bytes", "canonical_json", "sha256_hex", "digest"]
+__all__ = ["canonical_bytes", "canonical_json", "digest", "sha256_hex"]
 
 _ESCAPES = {
     '"': '\\"',

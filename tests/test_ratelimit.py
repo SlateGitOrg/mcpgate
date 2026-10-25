@@ -32,7 +32,9 @@ def test_burst_then_refill() -> None:
 
 
 def test_clients_are_isolated_and_overrides_apply() -> None:
-    limiter, _ = make(per_client=RateRule(rate=1, burst=1), client_overrides={"vip": RateRule(rate=1, burst=5)})
+    limiter, _ = make(
+        per_client=RateRule(rate=1, burst=1), client_overrides={"vip": RateRule(rate=1, burst=5)}
+    )
     assert limiter.check("a", "t").allowed
     assert not limiter.check("a", "t").allowed
     assert limiter.check("b", "t").allowed

@@ -14,7 +14,9 @@ from mcpgate.pinning import PinManager, PinStatus, PinStore
 
 def tool(name: str, description: str = "does things", **schema_props: object) -> types.Tool:
     props = schema_props or {"x": {"type": "string"}}
-    return types.Tool(name=name, description=description, input_schema={"type": "object", "properties": props})
+    return types.Tool(
+        name=name, description=description, input_schema={"type": "object", "properties": props}
+    )
 
 
 def fps(*tools: types.Tool) -> dict[str, Fingerprint]:

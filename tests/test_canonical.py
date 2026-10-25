@@ -12,13 +12,18 @@ from mcpgate.canonical import canonical_json, digest, loads
 json_scalars = st.none() | st.booleans() | st.integers(-(2**63), 2**63) | st.text(max_size=20)
 json_values = st.recursive(
     json_scalars | st.floats(allow_nan=False, allow_infinity=False),
-    lambda children: st.lists(children, max_size=4) | st.dictionaries(st.text(max_size=8), children, max_size=4),
+    lambda children: (
+        st.lists(children, max_size=4) | st.dictionaries(st.text(max_size=8), children, max_size=4)
+    ),
     max_leaves=20,
 )
 
 
 def test_sorted_keys_and_no_whitespace() -> None:
-    assert canonical_json({"b": 1, "a": [1, 2, {"d": None, "c": True}]}) == '{"a":[1,2,{"c":true,"d":null}],"b":1}'
+    assert (
+        canonical_json({"b": 1, "a": [1, 2, {"d": None, "c": True}]})
+        == '{"a":[1,2,{"c":true,"d":null}],"b":1}'
+    )
 
 
 def test_floats_follow_jcs_shapes() -> None:

@@ -56,8 +56,11 @@ async def test_catalog_is_namespaced_and_filtered(tmp_path: Path) -> None:
     async with gw.running(), Client(gw.server, cache=None) as client:
         names = [t.name for t in (await client.list_tools()).tools]
         assert names == [
-            "inventory__get_stock", "inventory__list_skus",
-            "notes__add_note", "notes__list_notes", "notes__search_notes",
+            "inventory__get_stock",
+            "inventory__list_skus",
+            "notes__add_note",
+            "notes__list_notes",
+            "notes__search_notes",
         ]
         tool = next(t for t in (await client.list_tools()).tools if t.name == "notes__search_notes")
         assert tool.meta is not None
@@ -111,9 +114,12 @@ async def test_invalid_arguments_are_rejected_before_upstream(tmp_path: Path) ->
 
 async def test_rate_limit(tmp_path: Path) -> None:
     gw = make_gateway(
-        tmp_path, Variants(),
-        rate_limits={"per_client": {"rate": 100, "burst": 100},
-                     "per_tool": {"inventory__get_*": {"rate": 0.01, "burst": 2}}},
+        tmp_path,
+        Variants(),
+        rate_limits={
+            "per_client": {"rate": 100, "burst": 100},
+            "per_tool": {"inventory__get_*": {"rate": 0.01, "burst": 2}},
+        },
     )
     async with gw.running(), Client(gw.server, cache=None) as client:
         results = [await client.call_tool("inventory__get_stock", {"sku": "SKU-002"}) for _ in range(3)]
@@ -160,7 +166,9 @@ async def test_schema_drift_via_refresh(tmp_path: Path) -> None:
     async with gw.running(), Client(gw.server, cache=None) as client:
         variants.inventory = "drifted"
         gw.upstreams["inventory"].request_reconnect()
-        await wait_for(lambda: gw.upstreams["inventory"].connects == 2 and gw.upstreams["inventory"].state == "ready")
+        await wait_for(
+            lambda: gw.upstreams["inventory"].connects == 2 and gw.upstreams["inventory"].state == "ready"
+        )
         await gw.refresh()
         result = await client.call_tool("inventory__adjust_stock", {"sku": "SKU-001", "delta": 5000})
         assert result.is_error
