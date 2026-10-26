@@ -256,7 +256,7 @@ Required test coverage of 85.0% reached. Total coverage: 95.00%
 
 ## Benchmarks
 
-`BENCH_CALLS=300 make bench` (Apple Silicon arm64, macOS, Python 3.12.13; other P50 builds were
+`BENCH_CALLS=300 make bench` (Apple Silicon arm64, macOS, Python 3.12.13; other builds were
 running on the same machine at the time, so treat these as rough). Latency of one
 `get_stock` call:
 
@@ -365,9 +365,6 @@ benchmarks/bench.py   latency overhead, micro-benchmarks, pin-mutation matrix
 examples/gateway.yaml annotated configuration
 docs/                 ARCHITECTURE.md, THREAT_MODEL.md
 ```
-
-Source size: `wc -l src/mcpgate/*.py src/mcpgate/samples/*.py` reports 4,183 lines.
-`wc -l tests/*.py tests/fixtures/*.py` reports 2,125 lines.
 
 ## License
 
